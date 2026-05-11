@@ -325,16 +325,18 @@ it('should create a change log record')
 <!-- end_slide -->
 ## DI vs Mocks
 
-When testing integrated code with side effects, prefer injected fakes (ie. DI) vs mocking.
+When testing integrated code with side effects, prefer injected fakes (or DI) vs mocking.
 <!-- new_line -->
 <!-- pause -->
-- DI is good at providing a transparent way of "mocking" behaviour your code depends on.
+- DI and Fakes are good at providing a transparent way of simulating behaviour your code depends on.
 -> Less managing mock state during your test suite, and less "forced" application states.
 -> Improves testing outcomes instead of implementation when needed.
+<!-- new_line -->
 <!-- pause -->
-- Mocking is good for replacing thin wrappers or testing against a third party library like a Queue service from your cloud provider.
+- Mocking deps is good for replacing thin wrappers or testing against a third party library like a Queue service from your cloud provider.
+<!-- new_line -->
 <!-- pause -->
-- Mocking is fine for functions/methods that are "Orchestrators" or pipeline'y in general and don't have a lot of invariants (ie. rules about state).
+- Mocking deps is fine for functions/methods that are "Orchestrators" or pipeline'y in general and don't have a lot of invariants (ie. rules about state).
 
 <!-- end_slide -->
 ## Was that even worth it?
@@ -346,22 +348,36 @@ Integration testing can be useful however, when dealing with complex multi-insta
 ## Unit tests
 Unit tests should cover:
 - Policy: guards like `isAdmin`, `isEditable` etc.
+<!-- new_line -->
+<!-- pause -->
 - Mappers: data transformations, especially at the edges of the application like `internal-type->external-type`.
+<!-- new_line -->
+<!-- pause -->
 - Validations: validation is like policy, but it lives at the edges.
+<!-- new_line -->
+<!-- pause -->
 - Utilities: reusable general-purpose logic, often data processing related.
+<!-- new_line -->
+<!-- pause -->
 ## Integration tests
 Anything that isn't testing the complete application, but can't be reduced to input-output without a lot of mocking/faking is an integration test.
 
 - Often very useful when doing migrations to new versions of third party software like updating to new database versions.
+<!-- new_line -->
+<!-- pause -->
 - Added benefit of having tests run against ACTUAL instances of other servers or storages.
-- Should cover "risky" boundaries and adapters like auth, 
+<!-- new_line -->
+<!-- pause -->
+- Should cover "risky" boundaries and adapters like auth.
+<!-- new_line -->
+<!-- pause -->
 <!-- end_slide -->
 ## Good tests are ultimately about good source code quality
 
 Your tests will only be as good as the thing they're testing; often you'll want to refactor your source code so it is more testable.
 <!-- new_line -->
 <!-- pause -->
-Usual code smells that make code brittle will also make it hard to test:
+Usual code smells that make code brittle will also make it hard(er) to test:
 <!-- pause -->
 - Generically useful/necessary modules are accessed directly instead of through an interface in multiple places
 <!-- pause -->
@@ -379,24 +395,23 @@ In integration testing like this you can utilise [Testcontainers](https://testco
 
 This adds quite a bit of complexity, so if you're running on thin wrappers around third party software the juice might not be worth the squeeze.
 <!-- end_slide -->
-### Less is more
-Only cover the main uses and api.
-<!-- pause -->
-
 ### Writing tests will slow your development down (in the short term at least)
 The velocity change can show up as delivering mergeable code a bit slower because you're writing tests.
 It can also show up in changes taking longer, if brittle tests cause every change to break tests (again, less is more).
 
 > Maybe in the age of Gen AI the question is more: how efficiently can we generate test coverage?
+<!-- pause -->
 
-<!-- end_slide -->
 ## Elephant in the room
 Gen AI has changed how we deliver software and will probably continue to do so. My findings from using AI to generate tests:
 <!-- pause -->
+<!-- new_line -->
 - Static instructions to the LLM are necessary: LLM's will generate verbose testing scenarios that are very elaborate if you don't direct it to do it a certain way.
 <!-- pause -->
+<!-- new_line -->
 - Test cases should probably come from the developer themselves, you can always ask the model to append your suite if you feel it's not enough. Stay critical.
 <!-- pause -->
+<!-- new_line -->
 - I'm not sold on having an agent code and write tests to said code (even in different context windows) so YMMV.
 
 <!-- end_slide -->
