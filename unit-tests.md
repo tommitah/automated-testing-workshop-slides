@@ -3,7 +3,7 @@ theme:
     name: terminal-dark
 title: Automated testing philosophy
 author: Tommi Tahvanainen
-date: 2026-04-21
+date: 2026-05-12
 ---
 
 # In this workshop
