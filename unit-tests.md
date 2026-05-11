@@ -116,7 +116,7 @@ Tests "are not aware" of the inner workings, instead testing behaviour as if a c
 Invariants in software can be:
 - validation rules
 - specifications/requirements of third party software: think 3rd party library needs to support some feature that the code using it expects.
-- business logic: switching databases or validation libraries should break tests if they don't fit into your contracts.
+- business logic: switching databases or validation libraries should break tests if they don't fit into your contracts/interfaces but not if they do.
 <!-- end_slide -->
 ## Testing invariants
 You should be testing invariants ie. the bit that diddles with data or control flow depending on the state of the universe:
@@ -133,29 +133,112 @@ export const create = async (data: Record<string, unknown>): SomeOtherData => {
   const result = await db.execute(`INSERT INTO cuckoo (foo, bar) VALUES (?, ?)`, data.foo, data.bar)
   return result
 }
-
-//----------------------------//
-
+```
+<!-- end_slide -->
+```typescript
 // Do this, and test against `validateData` logic if needed
-export const validateData = async (data: Record<string, unknown>): boolean => {
+export const validateData = (data: Record<string, unknown>): void => {
   if (!data.foo) {
-    throw new Error('no foo man')
+    throw new CustomError(500, 'no foo man')
   }
   if (!data.bar) {
-    throw new Error('no bar man')
+    throw new CustomError(500, 'no bar man')
   }
 }
 
-// We probably don't need to test the create function itself in unit tests.
+// We probably don't need to test the create function itself in unit tests, since the thing we're actually interested in would be the SQL.
 export const create = async (data: Record<string, unknown>): SomeOtherData => {
+  validateData(data)
   const result = await db.execute(`INSERT INTO cuckoo (foo, bar) VALUES (?, ?)`, data.foo, data.bar)
   return result
 }
 ```
 <!-- end_slide -->
-## Bad tests
+## Unit testing the invariant
 ```typescript
-// entity/document.ts
+it('should throw if foo is not defined', () => {
+  const err = (() => {
+    try {
+      validateData({ zoo: 'jar' })
+    } catch (err) {
+      return err
+    }
+  })()
+
+  expect((err as CustomError).statusCode).toBe(500)
+})
+```
+<!-- end_slide -->
+## More unit tests
+```typescript
+import type { AuthUser } from '../../types'
+import type { DominoAuthority } from '@entities/user'
+import { isValidUser } from './isValidUser'
+
+type Params =
+  | { user: AuthUser; authorities?: never; tt: string }
+  | { user?: never; authorities: DominoAuthority[]; tt: string }
+
+type Params2 =
+  | { user: AuthUser; authorities?: never }
+  | { user?: never; authorities: DominoAuthority[] }
+
+export const isAccountingAdmin = ({
+  user,
+  authorities,
+  tt,
+}: Params): boolean => {
+  if (user !== undefined && !isValidUser(user)) {
+    return false
+  }
+
+  return (authorities ?? user.dominoAuthorities).some(
+    (a) =>
+      a.accountingCompany === tt &&
+      a.endCustomer === undefined &&
+      a['@type'] === 'FOO' &&
+      ((a.role === 'BAR' && a.application !== 'APP1') ||
+        (a.application === 'APP2' && a.role === 'BAR')),
+  )
+}
+```
+<!-- end_slide -->
+```typescript
+import { describe, expect, it } from 'vitest'
+import { isAccountingAdmin } from './isAccountingAdmin'
+import { tt1 } from '../../../test-data/ttLa'
+import { users } from '../../../test-data/users'
+
+const expectedResults: {
+  [K in keyof typeof users]: boolean
+} = {
+  superAdminUser: false,
+  supportUser: false,
+  accountingUser: true,
+  auditorUser: false,
+  salaryAdminUser: false,
+  mainUser: false,
+  basicUser: false,
+  basicUser2: false,
+  loggedOutUser: false,
+}
+
+describe('#isAccountingAdmin', () => {
+  for (const userKey in users) {
+    const user = users[userKey]
+    const result = expectedResults[userKey]
+
+    it(`should return ${result?.toString()} when logged in as ${userKey}`, () => {
+      expect(user).toBeDefined()
+      expect(isAccountingAdmin({ user: user!, tt: tt1 })).toBe(result)
+    })
+  }
+})
+```
+<!-- end_slide -->
+## Bad tests (integration tests)
+```typescript
+// use-case/create-document.ts
 // impl
 import * as someStorage from '@some-storage'
 import * as someNotificationSystem from '@some-notification-system'
@@ -163,6 +246,9 @@ import * as changeLog from '@change-log'
 import type { User } from '@entity/auth/user'
 
 type Document = { id: string }
+
+export const someDomainMapper = (data: Record<string, unknown>): Document => ({ /*...MAPPING...*/ })
+
 export const create = async ({
   data,
   user
@@ -187,6 +273,9 @@ export const create = async ({
 //// AVOID THIS
 // This test just presupposes our code is correct, and mirrors its implementation. These kinds of tests are hard to break.
 import { vi } from 'vitest'
+import * as mod from '@use-case/create-document'
+import type { Document } from '@use-case/create-document'
+import type { User } from '@entity/auth/user'
 
 vi.mock('@some-storage', () => ({ insert: vi.fn().mockResolvedValue(undefined) }))
 vi.mock('@some-notification-system', () => ({ notify: vi.fn().mockResolvedValue(undefined) }))
@@ -197,16 +286,16 @@ it('should create a document record and do N side effects', async () => {
   const user: User = { id: 'bar', name: 'zoo' }
   const params = { data: document, user }
 
-  await create(params)
+  await mod.create(params)
 
   expect(someStorage.insert).to.have.been.called()
-  expect(someStorage.insert).to.have.been.calledWith(someDomainMapper(params))
+  expect(someStorage.insert).to.have.been.calledWith(mod.someDomainMapper(params))
   expect(someNotificationSystem.notify).to.have.been.calledWith(document.id)
   expect(changeLog.create).to.have.been.called()
 })
 ```
 <!-- end_slide -->
-## Good tests
+## Good tests (integration tests)
 Test outcomes instead, some change in implementation is also needed:
 
 ```typescript
@@ -253,74 +342,83 @@ export const makeDocumentUseCase = ({
 }
 ```
 <!-- end_slide -->
-<!-- column_layout: [3, 2] -->
-<!-- column: 0 -->
 ```typescript
 import { writeFile, readFile } from 'fs/promises'
 import { setTimeout } from 'node:timers/promises'
 import { type Dependencies, type Document, makeDocumentUseCase } from '@mod'
 import { CustomError } from '@custom-error'
 
-const LOCAL_FILE_STORAGE = './local-storage.json'
-// This is pseudo code
-const inMemoryDeps: Dependencies = {
-  // use filesystem as storage
-  someStorage: {
-    insert: async ({ data }: { data: Record<string, unknown> }) => {
-      await writeFile(LOCAL_FILE_STORAGE, JSON.stringify(data))
-      return data
-    },
-    get: async ({ id }: { id: string }) => {
-      try {
-        const file = await readFile(LOCAL_FILE_STORAGE, { encoding: 'utf8' })
-        const collection = JSON.parse(file) as Document[]
-        const document = collection.find((doc) => doc.id === id)
+// This is pseudo(ish) code
+const inMemoryDeps: Dependencies = () => {
+  const documents: Document[] = []
+  const logs: Record<string, unknown>[] = []
+  return {
+    someStorage: {
+      insert: async ({ data }: { data: Record<string, unknown> }) => {
+        documents.push(data as Document)
+        return data
+      },
+      get: async ({ id }: { id: string }) => {
+        const document = documents.find((doc) => doc.id === id)
+        if (document === undefined) {
+          throw new CustomError(404, 'No document found')
+        }
+
         return document
-      } catch (err) {
-        // for example
-        throw new CustomError(404, 'No document found')
       }
-    }
-  },
-  // ....
+    },
+    // ....
+  }
 }
 ```
-<!-- column: 1 -->
+<!-- end_slide -->
 ```typescript
-const inMemoryDeps: Dependencies = {
-  // ...
-  someNotificationSystem: {
-    notify: async (id: string) => {
-      await setTimeout(1000)
-      console.log('NOTIFIED')
-      return id
-    }
-  },
-  // use filesystem as storage
-  changeLog: {
-    create: async (data: Record<string, unknown> & { userId: string; createdAt: Date }) => {
-      await writeFile('./local-log.json', JSON.stringify(data))
-      return data
+const inMemoryDeps: Dependencies = () => {
+  // ....
+  return {
+    // ...
+    someNotificationSystem: {
+      notify: async (id: string) => {
+        await setTimeout(1000)
+        console.log('NOTIFIED')
+        return id
+      }
+    },
+    changeLog: {
+      create: async (data: Record<string, unknown> & { userId: string; createdAt: Date }) => {
+        logs.push(data)
+        return data
+      }
     }
   }
 }
 ```
-<!-- reset_layout-->
 <!-- end_slide -->
 ```typescript
-it('should create a document record', async () => {
+it('should create a document record and map to domain', async () => {
   const document: Document = { id: 'foo' }
   const user: User = { id: 'bar', name: 'zoo' }
   const params = { data: document, user }
-  const create = makeDocumentUseCase(inMemoryDeps)
+  const create = makeDocumentUseCase(inMemoryDeps())
   await create(params)
 
+  const res = await inMemoryDeps.someStorage.get({ id: document.id })
+
   // test outcomes
-  await inMemoryDeps.someStorage.get({ id: document.id })
+  expect(res).toBeDefined()
+  // check against expected domain type, ie. data processing part in `someDomainMapper`
+  expect(res).toDeepEqual({ /*....*/ })
 })
 
-it('should create a notification in the event system')
-it('should create a change log record')
+it('should create a notification in the event system', async () => {
+  // ...
+  expect(inMemoryDeps.someNotificationSystem.notify).to.have.been.called()
+})
+it('should create a change log record', async () => {
+  // ...
+  // more ambiguous, you CAN test behaviour but often it might not be as critical and depends on what the side effect targets.
+  expect(inMemoryDeps.changeLog.create).to.have.been.called()
+})
 ```
 <!-- end_slide -->
 ## DI vs Mocks
@@ -340,13 +438,32 @@ When testing integrated code with side effects, prefer injected fakes (or DI) vs
 
 <!-- end_slide -->
 ## Was that even worth it?
-The previous slides beg the question whether we're REALLY talking about unit testing at all anymore. The tests are testing complicated stuff with enough fakery and mockery to not be considered code that actually runs in production.
-I'd posit, that writing these kinds of tests is often a waste of time and especially in typed languages we should be covering the data processing parts and invariants, which are commonly regarded as business logic.
+The tests are testing complicated stuff with enough fakery and mockery to not be considered code that actually runs in production.
+I'd posit, that writing these kinds of tests religiously (especially with mocks) is often a waste of time and in statically typed languages we should be mostly covering the data processing parts and invariants, which are commonly regarded as business logic.
 
-Integration testing can be useful however, when dealing with complex multi-instanced applications such as microservice architecture. It requires different tooling and methods.
+Integration testing can be useful however, when dealing with complex multi-instanced applications such as microservice architecture. Doing that might require different tooling and methods.
+<!-- end_slide -->
+## Good tests are ultimately about good source code quality
+
+Your tests will only be as good as the thing they're testing; often you'll want to refactor your source code so it is more testable.
+<!-- new_line -->
+<!-- pause -->
+Usual code smells that make code brittle will also make it hard(er) to test:
+<!-- pause -->
+- Key complex dependencies are accessed directly instead of through an interface
+<!-- new_line -->
+<!-- pause -->
+- "God objects/classes"
+<!-- new_line -->
+<!-- pause -->
+- Leaky abstractions
+<!-- new_line -->
+<!-- pause -->
+
 <!-- end_slide -->
 ## Unit tests
 Unit tests should cover:
+<!-- pause -->
 - Policy: guards like `isAdmin`, `isEditable` etc.
 <!-- new_line -->
 <!-- pause -->
@@ -360,32 +477,26 @@ Unit tests should cover:
 <!-- new_line -->
 <!-- pause -->
 ## Integration tests
-Anything that isn't testing the complete application, but can't be reduced to input-output without a lot of mocking/faking is an integration test.
-
+Anything that isn't testing the complete application, but can't be reduced to input-output without a lot of mocking/faking probably ought to be an integration test.
+<!-- pause -->
+- Should cover some orchestration (glue layers between important components).
+<!-- new_line -->
+<!-- pause -->
+- Can cover more complex setups (like wiring between separate servers or microservices).
+<!-- new_line -->
+<!-- pause -->
 - Often very useful when doing migrations to new versions of third party software like updating to new database versions.
 <!-- new_line -->
 <!-- pause -->
-- Added benefit of having tests run against ACTUAL instances of other servers or storages.
+- Added benefit of having tests run against ACTUAL instances of your deps or even other servers.
 <!-- new_line -->
 <!-- pause -->
 - Should cover "risky" boundaries and adapters like auth.
 <!-- new_line -->
 <!-- pause -->
-<!-- end_slide -->
-## Good tests are ultimately about good source code quality
-
-Your tests will only be as good as the thing they're testing; often you'll want to refactor your source code so it is more testable.
+- Have a habit of being very complicated.
 <!-- new_line -->
 <!-- pause -->
-Usual code smells that make code brittle will also make it hard(er) to test:
-<!-- pause -->
-- Generically useful/necessary modules are accessed directly instead of through an interface in multiple places
-<!-- pause -->
-- "God objects/classes"
-<!-- pause -->
-- Leaky abstractions
-<!-- pause -->
-
 <!-- end_slide -->
 ## Okay, but what about the Database layer or any other non-trivial abstraction?
 Right, you might not want to apply the `in-memory database` context to testing the persistence layer itself.
