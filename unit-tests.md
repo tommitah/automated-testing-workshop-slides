@@ -530,8 +530,8 @@ Gen AI has changed how we deliver software and will probably continue to do so. 
 Resources:
 - [Sairyss/backend-best-practices](https://github.com/Sairyss/backend-best-practices#testing)
 - [Don't use in memory databases](https://phauer.com/2017/dont-use-in-memory-databases-tests-h2/)
-- [Youtube/How to refactor code that has no tests?](https://www.youtube.com/watch?v=wC4PYM5Ssls)
-- [Youtube/How do you fix a lack of unit tests?](https://www.youtube.com/watch?v=CCdtNywf-qs)
+- [Fredrik Christenson/How to refactor code that has no tests?](https://www.youtube.com/watch?v=wC4PYM5Ssls)
+- [Fredrik Christenson/How do you fix a lack of unit tests?](https://www.youtube.com/watch?v=CCdtNywf-qs)
 
 Some (non-platform-specific) tech people have found useful:
 - [Testcontainers](https://testcontainers.com/) For testing against "real live" containers of your dependencies like caches, db's etc.
