@@ -399,10 +399,11 @@ it('should create a document record and map to domain', async () => {
   const document: Document = { id: 'foo' }
   const user: User = { id: 'bar', name: 'zoo' }
   const params = { data: document, user }
-  const create = makeDocumentUseCase(inMemoryDeps())
+  const deps = inMemoryDeps()
+  const create = makeDocumentUseCase(deps)
   await create(params)
 
-  const res = await inMemoryDeps.someStorage.get({ id: document.id })
+  const res = await deps.someStorage.get({ id: document.id })
 
   // test outcomes
   expect(res).toBeDefined()
@@ -412,12 +413,12 @@ it('should create a document record and map to domain', async () => {
 
 it('should create a notification in the event system', async () => {
   // ...
-  expect(inMemoryDeps.someNotificationSystem.notify).to.have.been.called()
+  expect(deps.someNotificationSystem.notify).to.have.been.called()
 })
 it('should create a change log record', async () => {
   // ...
   // more ambiguous, you CAN test behaviour but often it might not be as critical and depends on what the side effect targets.
-  expect(inMemoryDeps.changeLog.create).to.have.been.called()
+  expect(deps.changeLog.create).to.have.been.called()
 })
 ```
 <!-- end_slide -->
