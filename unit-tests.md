@@ -205,9 +205,9 @@ export const isAccountingAdmin = ({
 <!-- end_slide -->
 ```typescript
 import { describe, expect, it } from 'vitest'
-import { isAccountingAdmin } from './isAccountingAdmin'
-import { tt1 } from '../../../test-data/ttLa'
-import { users } from '../../../test-data/users'
+import { isAccountingAdmin } from '@auth/checks/isAccountingAdmin'
+import { tt1 } from './test-data/ttLa'
+import { users } from './test-data/users'
 
 const expectedResults: {
   [K in keyof typeof users]: boolean
@@ -272,7 +272,7 @@ export const create = async ({
 ```typescript
 //// AVOID THIS
 // This test just presupposes our code is correct, and mirrors its implementation. These kinds of tests are hard to break.
-import { vi } from 'vitest'
+import { vi, it } from 'vitest'
 import * as mod from '@use-case/create-document'
 import type { Document } from '@use-case/create-document'
 import type { User } from '@entity/auth/user'
@@ -442,7 +442,7 @@ The tests are testing complicated stuff with enough fakery and mockery to not be
 I'd posit, that writing these kinds of tests religiously (especially with mocks) is often a waste of time and in statically typed languages we should be mostly covering the data processing parts and invariants, which are commonly regarded as business logic.
 
 Integration testing can be useful however, when dealing with complex multi-instanced applications such as microservice architecture. Doing that might require different tooling and methods.
-<!-- end_slide -->
+
 ## Good tests are ultimately about good source code quality
 
 Your tests will only be as good as the thing they're testing; often you'll want to refactor your source code so it is more testable.
@@ -459,6 +459,8 @@ Usual code smells that make code brittle will also make it hard(er) to test:
 - Leaky abstractions
 <!-- new_line -->
 <!-- pause -->
+>"The length of a test's setup method is inversely related to the readability of the code under test"
+-- Adam Tornhill
 
 <!-- end_slide -->
 ## Unit tests
